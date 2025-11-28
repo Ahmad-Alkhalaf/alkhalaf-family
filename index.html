@@ -1,0 +1,744 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>شجرة عائلة الخلف</title>
+	<script type="text/javascript" src="https://unpkg.com/vis-network/standalone/umd/vis-network.min.js"></script>
+	<style>
+	html, body {
+		height: 100vh;
+		margin: 0;
+		padding: 0;
+		box-sizing: border-box;
+		background: #e0e1dd;
+		overflow: hidden;
+	}
+	body {
+		display: flex;
+		flex-direction: column;
+		height: 100vh;
+	}
+	h2 {
+		flex: 0 0 auto;
+		text-align: center;
+		margin-top: 18px;
+		margin-bottom: 0;
+		font-size: 2em;
+		font-family: Tahoma, Arial, sans-serif;
+		font-weight: bold;
+		color: #1b263b;
+		background: none;
+		border-radius: 0;
+		display: block;
+		padding: 0;
+		letter-spacing: 0.5px;
+		box-shadow: none;
+		margin-left: auto;
+		margin-right: auto;
+	}
+	#mynetwork {
+		flex: 1 1 auto;
+		width: 100vw;
+		min-height: 0;
+		border: 1px solid #778da9;
+		background: #e0e1dd;
+	}
+	.vis-selected {
+		border: 2px solid #415a77 !important;
+	}
+	</style>
+</head>
+<body>
+	<div style="position:relative; height:0;">
+		<div id="homeBtnContainer" style="position:absolute; top:18px; left:24px; z-index:10;">
+			<button id="homeBtn" style="font-size:1.2em;padding:6px 18px;border-radius:6px;background:#1b263b;color:#e0e1dd;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+				<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#e0e1dd" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:2px;"><path d="M3 12L12 4l9 8"/><path d="M9 21V9h6v12"/></svg>
+			</button>
+		</div>
+		<div id="menuContainer" style="position:absolute; top:18px; right:24px; z-index:10;">
+			<button id="menuBtn" style="font-size:1.2em;padding:6px 18px;border-radius:6px;background:#1b263b;color:#e0e1dd;border:none;cursor:pointer;">☰</button>
+			<div id="dropdownMenu" style="display:none;position:absolute;top:44px;right:0;width:360px;background:#fff;border:1px solid #bbb;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.10);min-width:200px;z-index:100;direction:rtl;text-align:right;">
+			<div id="mainPageMenuItem" style="padding:18px 32px;cursor:pointer;color:#1b263b;font-size:1.25em;font-family:Tahoma, Arial, sans-serif;">إظهار شجرة العائلة كاملة</div>
+			<div id="searchMenuItem" style="padding:18px 32px;cursor:pointer;color:#1b263b;font-size:1.25em;font-family:Tahoma, Arial, sans-serif;">إظهار البحث</div>
+			</div>
+		</div>
+	</div>
+	<h2>عائلة الخلف</h2>
+	<div style="text-align:center; margin: 18px 0 8px 0;">
+		<button id="mainPageBtn" style="display:none;font-size:1.1em;padding:6px 18px;border-radius:6px;background:#1b263b;color:#e0e1dd;border:none;cursor:pointer;margin-bottom:8px;">إظهار شجرة العائلة كاملة</button>
+		<button id="toggleSearchBtn" style="display:none;font-size:1.1em;padding:6px 18px;border-radius:6px;background:#1b263b;color:#e0e1dd;border:none;cursor:pointer;">إظهار البحث</button>
+	</div>
+	<div id="searchBox" style="display:none;text-align:center; margin-bottom:8px;">
+		<input id="searchInput" type="text" placeholder="ابحث عن اسم..." style="font-size:1.1em;padding:6px 12px;border-radius:6px;border:1px solid #bbb;width:220px;max-width:90vw;direction:rtl;">
+		<button id="searchBtn" style="font-size:1.25em;padding:8px 8px;border-radius:8px;background:#1b263b;color:#fff;border:1px solid #bbb;cursor:pointer;font-family:Tahoma, Arial, sans-serif;">بحث</button>
+		<div id="searchResult" style="text-align:center;font-size:1.1em;color:#1b263b;margin-top:8px;"></div>
+	</div>
+	<div id="mynetwork"></div>
+	<script>
+
+		// Load members from family.json
+		let members = [];
+		fetch('family.json')
+			.then(response => response.json())
+			.then(data => {
+				members = data;
+				initializeFamilyTree(true);
+			})
+			.catch(error => {
+				alert('Failed to load family.json: ' + error);
+			});
+
+
+		function initializeFamilyTree(showMohammadLineage) {
+			// Home button logic
+			const homeBtnContainer = document.getElementById('homeBtnContainer');
+			const homeBtn = document.getElementById('homeBtn');
+			// Helper to show lineage for محمد أحمد الخلف
+			function showMohammadLineageView() {
+				const root = members.find(m => m.label === 'الخلف');
+				if (root) {
+					const ahmad = members.find(m => m.label === 'أحمد' && m.fatherId === root.id);
+					if (ahmad) {
+						const mohammad = members.find(m => m.label === 'محمد' && m.fatherId === ahmad.id);
+						if (mohammad) {
+							const lineage = getPaternalLineageChain(mohammad.id);
+							const children = members.filter(m => m.fatherId === mohammad.id).map(m => m.id);
+							const visibleIds = Array.from(new Set([...lineage, ...children]));
+							const { nodes: newNodes, edges: newEdges } = buildDataSet(visibleIds, true);
+							updateNetworkData(newNodes, newEdges);
+						}
+					}
+				}
+			}
+			homeBtn.addEventListener('click', showMohammadLineageView);
+			// Menu logic
+			const menuBtn = document.getElementById('menuBtn');
+			const dropdownMenu = document.getElementById('dropdownMenu');
+			const mainPageMenuItem = document.getElementById('mainPageMenuItem');
+			const searchMenuItem = document.getElementById('searchMenuItem');
+			const mainPageBtn = document.getElementById('mainPageBtn');
+			const toggleSearchBtn = document.getElementById('toggleSearchBtn');
+			const searchBox = document.getElementById('searchBox');
+			const searchInput = document.getElementById('searchInput');
+			const searchBtn = document.getElementById('searchBtn');
+			const searchResult = document.getElementById('searchResult');
+
+			// Hide the old buttons, use menu instead
+			mainPageBtn.style.display = 'none';
+			toggleSearchBtn.style.display = 'none';
+
+			// Dropdown menu toggle
+			let menuOpen = false;
+			menuBtn.addEventListener('click', function(e) {
+				e.stopPropagation();
+				menuOpen = !menuOpen;
+				dropdownMenu.style.display = menuOpen ? 'block' : 'none';
+				// Always hide the search box when opening the menu
+				if (menuOpen) {
+					searchVisible = false;
+					searchBox.style.display = 'none';
+					updateToggleBtnText();
+				}
+			});
+			// Hide menu when clicking outside
+			document.addEventListener('click', function() {
+				menuOpen = false;
+				dropdownMenu.style.display = 'none';
+			});
+			dropdownMenu.addEventListener('click', function(e) { e.stopPropagation(); });
+
+			// Main Page menu item
+			mainPageMenuItem.addEventListener('click', function() {
+				const { nodes: allNodes, edges: allEdges } = buildDataSet();
+				updateNetworkData(allNodes, allEdges);
+				menuOpen = false;
+				dropdownMenu.style.display = 'none';
+			});
+			// Search menu item
+			let searchVisible = false;
+			function updateToggleBtnText() {
+				toggleSearchBtn.textContent = searchVisible ? 'إخفاء البحث' : 'إظهار البحث';
+			}
+			searchMenuItem.addEventListener('click', function() {
+				searchVisible = !searchVisible;
+				searchBox.style.display = searchVisible ? '' : 'none';
+				updateToggleBtnText();
+				menuOpen = false;
+				dropdownMenu.style.display = 'none';
+			});
+			updateToggleBtnText();
+
+			function getFullNameChain(member) {
+				const names = [];
+				let current = member;
+				while (current) {
+					names.push(current.label);
+					if (!current.fatherId) break;
+					current = members.find(m => m.id === current.fatherId);
+				}
+				return names;
+			}
+
+			function handleSearch() {
+				const query = searchInput.value.trim();
+				if (!query) {
+					searchResult.textContent = '';
+					return;
+				}
+				// Find all members whose label exactly matches the query
+				const found = members.filter(m => m.label.trim() === query);
+				if (found.length === 0) {
+					searchResult.textContent = 'لا يوجد نتائج.';
+					return;
+				}
+				// For each found member, show their full name chain as a clickable result
+				searchResult.innerHTML = found.map(member => {
+					const chain = getFullNameChain(member);
+					// Make the first name (the searched member) clickable
+					return `<div style="margin:6px 0;cursor:pointer;font-family:Tahoma, Arial, sans-serif;color:#1b263b;font-size:1.15em;" class="search-result-item" data-id="${member.id}"><span style="text-decoration:underline;">${chain[0]}</span> ${chain.slice(1).join(' ')}</div>`;
+				}).join('');
+
+				// Add click event listeners to each result
+				document.querySelectorAll('.search-result-item').forEach(el => {
+					el.addEventListener('click', function() {
+						const memberId = parseInt(this.getAttribute('data-id'));
+						// Show lineage view for this member
+						const lineage = getPaternalLineageChain(memberId);
+						const children = members.filter(m => m.fatherId === memberId).map(m => m.id);
+						const visibleIds = Array.from(new Set([...lineage, ...children]));
+						const { nodes: newNodes, edges: newEdges } = buildDataSet(visibleIds, true);
+						updateNetworkData(newNodes, newEdges);
+					});
+				});
+			}
+
+			searchBtn.addEventListener('click', handleSearch);
+			searchInput.addEventListener('keydown', function(e) {
+				if (e.key === 'Enter') handleSearch();
+			});
+			// ...existing code from after members definition to the end of the script...
+
+			// Helper: get paternal lineage (including self)
+			function getPaternalLineageChain(id) {
+				const lineage = [];
+				let current = members.find(m => m.id === id);
+				while (current) {
+					lineage.push(current.id);
+					if (!current.fatherId) break;
+					current = members.find(m => m.id === current.fatherId);
+				}
+				return lineage;
+			}
+
+			// Helper: assign generation levels to each member
+			function assignLevels(members) {
+				// Find all root ancestors (no fatherId)
+				const roots = members.filter(m => !m.fatherId);
+				const levels = {};
+				// BFS to assign levels
+				const queue = [];
+				roots.forEach(root => {
+					levels[root.id] = 0;
+					queue.push(root.id);
+				});
+				while (queue.length > 0) {
+					const currentId = queue.shift();
+					const currentLevel = levels[currentId];
+					members.filter(m => m.fatherId === currentId).forEach(child => {
+						levels[child.id] = currentLevel + 1;
+						queue.push(child.id);
+					});
+				}
+				return levels;
+			}
+
+			// Build nodes and edges for vis.js, with level property
+			function buildDataSet(filteredIds = null, showImages = false) {
+				const filteredMembers = filteredIds
+					? members.filter(m => filteredIds.includes(m.id))
+					: members;
+				const levels = assignLevels(filteredMembers);
+				const defaultImage = 'male icon (white).png';
+				const maxFontSize = 36;
+				const minFontSize = 8;
+				const maxNodeSize = 60;
+				const minNodeSize = 24;
+				// Find max generation (deepest level)
+				const allLevels = Object.values(levels);
+				const maxLevel = Math.max(...allLevels);
+				const minLevel = Math.min(...allLevels);
+				const nodes = new vis.DataSet(filteredMembers.map(m => {
+					const level = levels[m.id];
+					if (showImages) {
+						// Lineage view: keep fixed size and font
+						const minChars = 10;
+						let paddedLabel = m.label;
+						const nbsp = '\u00A0';
+						paddedLabel = nbsp + m.label + nbsp + '\n';
+						let imgSrc = m.image ? m.image : defaultImage;
+						return {
+							id: m.id,
+							label: paddedLabel,
+							shape: 'image',
+							image: imgSrc,
+							color: {
+								border: '#1b263b',
+								background: '#415a77',
+								highlight: {
+									border: '#0d1b2a',
+									background: '#778da9'
+								}
+							},
+							borderWidth: 3,
+							borderWidthSelected: 6,
+							font: {
+								color: '#e0e1dd',
+								size: 22,
+								background: '#1b263b',
+								face: 'Tahoma, Arial, sans-serif',
+								align: 'center',
+								strokeWidth: 4,
+								strokeColor: '#1b263b'
+							},
+							level: level
+						};
+					} else {
+						// Main view: scale size and font by generation
+						const t = (level - minLevel) / Math.max(1, maxLevel - minLevel);
+						const nodeSize = Math.round(maxNodeSize - t * (maxNodeSize - minNodeSize));
+						const fontSize = Math.round(maxFontSize - t * (maxFontSize - minFontSize));
+						const nbsp = '\u00A0';
+						const paddedLabel = nbsp + m.label + nbsp + '\n';
+						return {
+							id: m.id,
+							label: paddedLabel,
+							shape: 'box',
+							color: {
+								border: '#1b263b',
+								background: '#415a77',
+								highlight: {
+									border: '#0d1b2a',
+									background: '#778da9'
+								}
+							},
+							borderWidthSelected: 6,
+							size: nodeSize,
+							font: { color: '#e0e1dd', size: fontSize, face: 'Tahoma, Arial, sans-serif' },
+							level: level
+						};
+					}
+				}));
+				const edges = new vis.DataSet(
+					filteredMembers.filter(m => m.fatherId && (!filteredIds || filteredIds.includes(m.fatherId))).map(m => ({
+						from: m.fatherId,
+						to: m.id,
+						arrows: 'to',
+						color: { color: '#888' }
+					}))
+				);
+				return { nodes, edges };
+			}
+
+			const container = document.getElementById('mynetwork');
+			// Add custom tooltip div
+			const customTooltip = document.createElement('div');
+			customTooltip.id = 'custom-tooltip';
+			customTooltip.style.position = 'fixed';
+			customTooltip.style.display = 'none';
+			customTooltip.style.zIndex = '1000';
+			customTooltip.style.pointerEvents = 'none';
+			customTooltip.style.background = '#415a77'; // Dusk Blue, matches main box
+			customTooltip.style.border = '2px solid #1b263b'; // Prussian Blue
+			customTooltip.style.borderRadius = '10px';
+			customTooltip.style.padding = '16px 20px 10px 20px';
+			customTooltip.style.boxShadow = '0 2px 12px rgba(0,0,0,0.10)';
+			document.body.appendChild(customTooltip);
+
+			// Find the member for 'محمد أحمد الخلف' (محمد, whose father is أحمد, whose father is الخلف)
+			let nodes, edges;
+			if (showMohammadLineage) {
+				// Find 'الخلف'
+				const root = members.find(m => m.label === 'الخلف');
+				if (root) {
+					// Find 'أحمد' whose father is الخلف
+					const ahmad = members.find(m => m.label === 'أحمد' && m.fatherId === root.id);
+					if (ahmad) {
+						// Find 'محمد' whose father is أحمد
+						const mohammad = members.find(m => m.label === 'محمد' && m.fatherId === ahmad.id);
+						if (mohammad) {
+							// Show lineage for this محمد
+							const lineage = getPaternalLineageChain(mohammad.id);
+							const children = members.filter(m => m.fatherId === mohammad.id).map(m => m.id);
+							const visibleIds = Array.from(new Set([...lineage, ...children]));
+							({ nodes, edges } = buildDataSet(visibleIds, true));
+						} else {
+							({ nodes, edges } = buildDataSet());
+						}
+					} else {
+						({ nodes, edges } = buildDataSet());
+					}
+				} else {
+					({ nodes, edges } = buildDataSet());
+				}
+			} else {
+				({ nodes, edges } = buildDataSet());
+			}
+			// Helper to get layout direction based on view
+			function getLayoutDirection() {
+				// If in main view (all nodes), use 'DU' (down-up). If in lineage view, use 'UD' (up-down)
+				if (nodes.length === members.length) {
+					return 'DU';
+				} else {
+					return 'UD';
+				}
+			}
+			let options = {
+				layout: {
+					hierarchical: {
+						direction: getLayoutDirection(),
+						sortMethod: 'directed',
+						nodeSpacing: 200,
+						levelSeparation: 150,
+						shakeTowards: 'roots',
+					}
+				},
+				nodes: {
+					borderWidth: 2,
+					size: 30,
+					color: {
+						border: '#1b263b', // Prussian Blue
+						background: '#415a77', // Dusk Blue
+						highlight: {
+							border: '#0d1b2a', // Ink Black
+							background: '#778da9' // Lavender Grey
+						}
+					},
+					font: {
+						color: '#e0e1dd', // Alabaster Grey
+						size: 18
+					}
+				},
+				edges: {
+					smooth: false,
+					arrows: { to: { enabled: true, scaleFactor: 1 } },
+					color: '#778da9', // Lavender Grey
+					width: 2
+				},
+				interaction: { hover: true, navigationButtons: { enabled: true, initiallyActive: true, zoom: false, dragView: false }, selectable: true, tooltipDelay: 200, dragNodes: false }
+			};
+
+			let network = new vis.Network(container, { nodes, edges }, options);
+			// Auto-fit the network to view on load
+			network.once('afterDrawing', function() {
+				network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } });
+			});
+
+			// When switching between main and lineage views, update layout direction accordingly
+			function updateNetworkData(newNodes, newEdges) {
+				nodes = newNodes;
+				edges = newEdges;
+				options.layout.hierarchical.direction = (nodes.length === members.length) ? 'DU' : 'UD';
+				network.setOptions(options);
+				network.setData({ nodes, edges });
+				// Auto-fit after data changes
+				setTimeout(() => network.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }), 100);
+			}
+
+			// On node click: show lineage and children with images
+			network.on('click', function(params) {
+				if (params.nodes.length) {
+					const selectedId = params.nodes[0];
+					// Get paternal lineage (including self)
+					const lineage = getPaternalLineageChain(selectedId);
+					// Get children of selected node
+					const children = members.filter(m => m.fatherId === selectedId).map(m => m.id);
+					// Show selected, lineage, and children, with images
+					const visibleIds = Array.from(new Set([...lineage, ...children]));
+					const { nodes: newNodes, edges: newEdges } = buildDataSet(visibleIds, true);
+					updateNetworkData(newNodes, newEdges);
+				}
+				// Do nothing if background is clicked
+			});
+
+			// Always show home button
+			homeBtnContainer.style.display = '';
+
+			// Custom tooltip logic for image on hover in main view
+			network.on('hoverNode', function(params) {
+				// Only show tooltip in main view (not lineage view)
+				if (network.body.data.nodes.length === members.length) {
+					const nodeId = params.node;
+					const member = members.find(m => m.id === nodeId);
+					const defaultImage = 'male icon (white).png';
+					let imgSrc = member && member.image ? member.image : defaultImage;
+					if (member) {
+						customTooltip.innerHTML = `
+							<div style="text-align:center;">
+								<img src='${imgSrc}' style='width:90px;height:90px;border-radius:8px;border:2px solid #1b263b;background:#415a77;margin-bottom:8px;'/><br>
+								<span style='display:inline-block;margin-top:6px;padding:2px 12px;font-size:18px;color:#e0e1dd;background:#415a77;border-radius:6px;font-family:Tahoma, Arial, sans-serif;'>${member.label}</span>
+							</div>
+						`;
+						customTooltip.style.display = 'block';
+					}
+				}
+			});
+			network.on('blurNode', function(params) {
+				customTooltip.style.display = 'none';
+			});
+			network.on('afterDrawing', function() {
+				// Move tooltip with mouse
+				container.onmousemove = function(e) {
+					if (customTooltip.style.display === 'block') {
+						customTooltip.style.left = (e.clientX + 20) + 'px';
+						customTooltip.style.top = (e.clientY + 20) + 'px';
+					}
+				};
+			});
+		}
+
+		// Helper: get paternal lineage (including self)
+		function getPaternalLineageChain(id) {
+			const lineage = [];
+			let current = members.find(m => m.id === id);
+			while (current) {
+				lineage.push(current.id);
+				if (!current.fatherId) break;
+				current = members.find(m => m.id === current.fatherId);
+			}
+			return lineage;
+		}
+
+		// Helper: assign generation levels to each member
+		function assignLevels(members) {
+			// Find all root ancestors (no fatherId)
+			const roots = members.filter(m => !m.fatherId);
+			const levels = {};
+			// BFS to assign levels
+			const queue = [];
+			roots.forEach(root => {
+				levels[root.id] = 0;
+				queue.push(root.id);
+			});
+			while (queue.length > 0) {
+				const currentId = queue.shift();
+				const currentLevel = levels[currentId];
+				members.filter(m => m.fatherId === currentId).forEach(child => {
+					levels[child.id] = currentLevel + 1;
+					queue.push(child.id);
+				});
+			}
+			return levels;
+		}
+
+		// Build nodes and edges for vis.js, with level property
+		function buildDataSet(filteredIds = null, showImages = false) {
+			const filteredMembers = filteredIds
+				? members.filter(m => filteredIds.includes(m.id))
+				: members;
+			const levels = assignLevels(filteredMembers);
+			const defaultImage = 'male icon (white).png';
+			const maxFontSize = 28;
+			const minFontSize = 14;
+			const maxNodeSize = 60;
+			const minNodeSize = 24;
+			// Find max generation (deepest level)
+			const allLevels = Object.values(levels);
+			const maxLevel = Math.max(...allLevels);
+			const minLevel = Math.min(...allLevels);
+			const nodes = new vis.DataSet(filteredMembers.map(m => {
+				const level = levels[m.id];
+				if (showImages) {
+					// Lineage view: keep fixed size and font
+					const minChars = 10;
+					let paddedLabel = m.label;
+					const nbsp = '\u00A0';
+					paddedLabel = nbsp + m.label + nbsp + '\n';
+					let imgSrc = m.image ? m.image : defaultImage;
+					return {
+						id: m.id,
+						label: paddedLabel,
+						shape: 'image',
+						image: imgSrc,
+						color: {
+							border: '#1b263b',
+							background: '#415a77',
+							highlight: {
+								border: '#0d1b2a',
+								background: '#778da9'
+							}
+						},
+						borderWidth: 3,
+						borderWidthSelected: 6,
+						font: {
+							color: '#e0e1dd',
+							size: 22,
+							background: '#1b263b',
+							face: 'Tahoma, Arial, sans-serif',
+							align: 'center',
+							strokeWidth: 4,
+							strokeColor: '#1b263b'
+						},
+						level: level
+					};
+				} else {
+					// Main view: scale size and font by generation
+					const t = (level - minLevel) / Math.max(1, maxLevel - minLevel);
+					const nodeSize = Math.round(maxNodeSize - t * (maxNodeSize - minNodeSize));
+					const fontSize = Math.round(maxFontSize - t * (maxFontSize - minFontSize));
+					const nbsp = '\u00A0';
+					const paddedLabel = nbsp + m.label + nbsp + '\n';
+					return {
+						id: m.id,
+						label: paddedLabel,
+						shape: 'box',
+						color: {
+							border: '#1b263b',
+							background: '#415a77',
+							highlight: {
+								border: '#0d1b2a',
+								background: '#778da9'
+							}
+						},
+						borderWidthSelected: 6,
+						size: nodeSize,
+						font: { color: '#e0e1dd', size: fontSize, face: 'Tahoma, Arial, sans-serif' },
+						level: level
+					};
+				}
+			}));
+			const edges = new vis.DataSet(
+				filteredMembers.filter(m => m.fatherId && (!filteredIds || filteredIds.includes(m.fatherId))).map(m => ({
+					from: m.fatherId,
+					to: m.id,
+					arrows: 'to',
+					color: { color: '#888' }
+				}))
+			);
+			return { nodes, edges };
+		}
+
+		const container = document.getElementById('mynetwork');
+		// Add custom tooltip div
+		const customTooltip = document.createElement('div');
+		customTooltip.id = 'custom-tooltip';
+		customTooltip.style.position = 'fixed';
+		customTooltip.style.display = 'none';
+		customTooltip.style.zIndex = '1000';
+		customTooltip.style.pointerEvents = 'none';
+		customTooltip.style.background = '#415a77'; // Dusk Blue, matches main box
+		customTooltip.style.border = '2px solid #1b263b'; // Prussian Blue
+		customTooltip.style.borderRadius = '10px';
+		customTooltip.style.padding = '16px 20px 10px 20px';
+		customTooltip.style.boxShadow = '0 2px 12px rgba(0,0,0,0.10)';
+		document.body.appendChild(customTooltip);
+
+		let { nodes, edges } = buildDataSet();
+		// Helper to get layout direction based on view
+		function getLayoutDirection() {
+			// If in main view (all nodes), use 'DU' (down-up). If in lineage view, use 'UD' (up-down)
+			if (nodes.length === members.length) {
+				return 'DU';
+			} else {
+				return 'UD';
+			}
+		}
+		let options = {
+			layout: {
+				hierarchical: {
+					direction: getLayoutDirection(),
+					sortMethod: 'directed',
+					nodeSpacing: 200,
+					levelSeparation: 150,
+					shakeTowards: 'roots',
+				}
+			},
+			nodes: {
+				borderWidth: 2,
+				size: 30,
+				color: {
+					border: '#1b263b', // Prussian Blue
+					background: '#415a77', // Dusk Blue
+					highlight: {
+						border: '#0d1b2a', // Ink Black
+						background: '#778da9' // Lavender Grey
+					}
+				},
+				font: {
+					color: '#e0e1dd', // Alabaster Grey
+					size: 18
+				}
+			},
+			edges: {
+				smooth: false,
+				arrows: { to: { enabled: true, scaleFactor: 1 } },
+				color: '#778da9', // Lavender Grey
+				width: 2
+			},
+			interaction: { hover: true, navigationButtons: true, selectable: true, tooltipDelay: 200, dragNodes: false }
+		};
+		let network = new vis.Network(container, { nodes, edges }, options);
+
+		// When switching between main and lineage views, update layout direction accordingly
+		function updateNetworkData(newNodes, newEdges) {
+			nodes = newNodes;
+			edges = newEdges;
+			options.layout.hierarchical.direction = (nodes.length === members.length) ? 'DU' : 'UD';
+			network.setOptions(options);
+			network.setData({ nodes, edges });
+		}
+
+		// On node click: show lineage and children with images
+		network.on('click', function(params) {
+			if (params.nodes.length) {
+				const selectedId = params.nodes[0];
+				// Get paternal lineage (including self)
+				const lineage = getPaternalLineageChain(selectedId);
+				// Get children of selected node
+				const children = members.filter(m => m.fatherId === selectedId).map(m => m.id);
+				// Show selected, lineage, and children, with images
+				const visibleIds = Array.from(new Set([...lineage, ...children]));
+				const { nodes: newNodes, edges: newEdges } = buildDataSet(visibleIds, true);
+				updateNetworkData(newNodes, newEdges);
+			} else {
+				// Clicked background: reset to full tree (names only)
+				const { nodes: allNodes, edges: allEdges } = buildDataSet();
+				updateNetworkData(allNodes, allEdges);
+			}
+		});
+
+		// Custom tooltip logic for image on hover in main view
+		network.on('hoverNode', function(params) {
+			// Only show tooltip in main view (not lineage view)
+			if (network.body.data.nodes.length === members.length) {
+				const nodeId = params.node;
+				const member = members.find(m => m.id === nodeId);
+				const defaultImage = 'male icon (white).png';
+				let imgSrc = member && member.image ? member.image : defaultImage;
+				if (member) {
+					customTooltip.innerHTML = `
+						<div style="text-align:center;">
+							<img src='${imgSrc}' style='width:90px;height:90px;border-radius:8px;border:2px solid #1b263b;background:#415a77;margin-bottom:8px;'/><br>
+							<span style='display:inline-block;margin-top:6px;padding:2px 12px;font-size:18px;color:#e0e1dd;background:#415a77;border-radius:6px;font-family:Tahoma, Arial, sans-serif;'>${member.label}</span>
+						</div>
+					`;
+					customTooltip.style.display = 'block';
+				}
+			}
+		});
+		network.on('blurNode', function(params) {
+			customTooltip.style.display = 'none';
+		});
+		network.on('afterDrawing', function() {
+			// Move tooltip with mouse
+			container.onmousemove = function(e) {
+				if (customTooltip.style.display === 'block') {
+					customTooltip.style.left = (e.clientX + 20) + 'px';
+					customTooltip.style.top = (e.clientY + 20) + 'px';
+				}
+			};
+		});
+	</script>
+</body>
+</html>
